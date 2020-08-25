@@ -24,6 +24,8 @@ def parser():
                         help="windown inference display. For headless systems")
     parser.add_argument("--ext_output", action='store_true',
                         help="display bbox coordinates of detected objects")
+    parser.add_argument("--classify", action='store_true',
+                        help="Classify image")
     parser.add_argument("--save_labels", action='store_true',
                         help="save detections bbox for each image in yolo format")
     parser.add_argument("--config_file", default="./cfg/yolov4.cfg",
@@ -97,21 +99,38 @@ def prepare_batch(images, network, channels=3):
     return darknet.IMAGE(width, height, channels, darknet_images)
 
 
-def image_detection(image_path, network, class_names, class_colors, thresh):
-    # Darknet doesn't accept numpy images.
-    # Create one with image we reuse for each detect
+def numpy2darknet(image):
+    '''# Darknet doesn't accept numpy images.
+    Create a Darknet type image from a numpy image.
+    '''
+    height, width, _ = image.shape
+    darknet_image = darknet.make_image(width, height, 3)
+    darknet.copy_image_from_bytes(darknet_image, image.tobytes())
+    return darknet_image
+
+
+def resize_image(network, image_path):
     width = darknet.network_width(network)
     height = darknet.network_height(network)
-    darknet_image = darknet.make_image(width, height, 3)
-
     image = cv2.imread(image_path)
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    image_resized = cv2.resize(image_rgb, (width, height),
-                               interpolation=cv2.INTER_LINEAR)
+    return cv2.resize(image_rgb, (width, height),
+                      interpolation=cv2.INTER_LINEAR)
 
-    darknet.copy_image_from_bytes(darknet_image, image_resized.tobytes())
+
+def image_classification(network, image_path, class_names):
+    resized_image = resize_image(network, image_path)
+    darknet_image = numpy2darknet(resized_image)
+    detections = darknet.predict_image(network, darknet_image)
+    predictions = [(name, detections[idx]) for idx, name in enumerate(class_names)]
+    return sorted(predictions, key=lambda x: -x[1])
+
+
+def image_detection(image_path, network, class_names, class_colors, thresh):
+    resized_image = resize_image(network, image_path)
+    darknet_image = numpy2darknet(resized_image)
     detections = darknet.detect_image(network, class_names, darknet_image, thresh=thresh)
-    image = darknet.draw_boxes(detections, image_resized, class_colors)
+    image = darknet.draw_boxes(detections, resized_image, class_colors)
     return cv2.cvtColor(image, cv2.COLOR_BGR2RGB), detections
 
 
@@ -199,18 +218,22 @@ def main():
         else:
             image_name = input("Enter Image Path: ")
         prev_time = time.time()
-        image, detections = image_detection(
-            image_name, network, class_names, class_colors, args.thresh
-            )
-        if args.save_labels:
-            save_annotations(image_name, image, detections, class_names)
-        darknet.print_detections(detections, args.ext_output)
-        fps = int(1/(time.time() - prev_time))
-        print("FPS: {}".format(fps))
-        if not args.dont_show:
-            cv2.imshow('Inference', image)
-            if cv2.waitKey() & 0xFF == ord('q'):
-                break
+        if args.classify:
+            detections = image_classification(network, image_name, class_names)
+            print(detections)
+        else:
+            image, detections = image_detection(
+                image_name, network, class_names, class_colors, args.thresh
+                )
+            if args.save_labels:
+                save_annotations(image_name, image, detections, class_names)
+            darknet.print_detections(detections, args.ext_output)
+            fps = int(1/(time.time() - prev_time))
+            print("FPS: {}".format(fps))
+            if not args.dont_show:
+                cv2.imshow('Inference', image)
+                if cv2.waitKey() & 0xFF == ord('q'):
+                    break
         index += 1
 
 
