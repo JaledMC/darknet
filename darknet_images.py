@@ -100,7 +100,7 @@ def prepare_batch(images, network, channels=3):
 
 
 def numpy2darknet(image):
-    '''# Darknet doesn't accept numpy images.
+    '''Darknet doesn't accept numpy images.
     Create a Darknet type image from a numpy image.
     '''
     height, width, _ = image.shape
