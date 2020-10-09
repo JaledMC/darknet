@@ -115,6 +115,19 @@ def image_detection(image_path, network, class_names, class_colors, thresh):
     return cv2.cvtColor(image, cv2.COLOR_BGR2RGB), detections
 
 
+def image_classification(image):
+    width = darknet.network_width(network)
+    height = darknet.network_height(network)
+    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    image_resized = cv2.resize(image_rgb, (width, height),
+                                interpolation=cv2.INTER_LINEAR)
+    darknet_image = darknet.make_image(width, height, 3)
+    darknet.copy_image_from_bytes(darknet_image, image_resized.tobytes())
+    detections = darknet.predict_image(network, darknet_image)
+    predictions = [(name, detections[idx]) for idx, name in enumerate(class_names)]
+    return sorted(predictions, key=lambda x: -x[1])
+
+
 def batch_detection(network, images, class_names, class_colors,
                     thresh=0.25, hier_thresh=.5, nms=.45, batch_size=4):
     image_height, image_width, _ = check_batch_shape(images, batch_size)
