@@ -115,7 +115,7 @@ def image_detection(image_path, network, class_names, class_colors, thresh):
     return cv2.cvtColor(image, cv2.COLOR_BGR2RGB), detections
 
 
-def image_classification(image):
+def image_classification(image, network, class_names):
     width = darknet.network_width(network)
     height = darknet.network_height(network)
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
